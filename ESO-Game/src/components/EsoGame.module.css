@@ -1,0 +1,384 @@
+.gameCard {
+  max-width: 600px;
+  margin: 0 auto;
+  overflow: hidden;
+  position: relative;
+  background: linear-gradient(to bottom, #56ccf2, #78ffd6);
+  box-shadow: var(--shadow-layer);
+  border: none;
+  transition: background 0.5s ease;
+  width: 600px;
+}
+
+.night {
+  background: linear-gradient(to bottom, #0f0c29, #302b63, #24243e) !important;
+}
+.night .ground {
+  background: linear-gradient(to top, #222, #333);
+}
+
+.gameContainer {
+  position: relative;
+  height: 200px;
+  border-radius: var(--control-radius);
+  overflow: hidden;
+}
+
+.ground {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 20px;
+  background: linear-gradient(to top, #556b2f, #6b8e23);
+  z-index: 1;
+}
+
+.character {
+  position: absolute;
+  transition: transform 0.2s ease-out;
+  z-index: 2;
+  cursor: pointer;
+  /* Выравниваем по нижнему краю */
+  display: flex;
+  align-items: flex-end;
+}
+
+.character.jumping {
+  transform: translateY(-20px);
+  transition: transform 0.3s cubic-bezier(0.5, 1, 0.5, 1);
+}
+.character svg {
+  width: 100%;
+  height: 100%;
+  /* Компенсируем высоту ушек */
+  margin-bottom: -9px;
+}
+.character.running {
+  animation: bodySway 0.8s infinite ease-in-out;
+}
+
+@keyframes bodySway {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+.leg {
+  animation: legMove 0.3s infinite alternate;
+}
+
+@keyframes legMove {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(5deg);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+.barrel {
+  position: absolute;
+  z-index: 1;
+  transition: left 0.1s linear; /* Для плавного движения */
+  filter: drop-shadow(2px 2px 2px rgba(0, 0, 0, 0.3));
+}
+/* Анимация качения бочки */
+@keyframes barrelRoll {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+.running .barrel {
+  animation: barrelRoll 1s infinite linear;
+}
+.cloud {
+  position: absolute;
+  z-index: 1;
+  height: 40px;
+  transition: transform 0.5s linear;
+  will-change: transform; /* Для оптимизации анимации */
+  /* animation: cloudFloat linear infinite; */
+}
+.cloud svg {
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes cloudFloat {
+  0% {
+    transform: translateX(600px);
+  }
+  100% {
+    transform: translateX(-100px);
+  }
+}
+.gameControls {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  background-color: var(--color-bg-default);
+  padding: var(--space-m);
+  border-radius: var(--control-radius);
+  box-shadow: var(--shadow-layer);
+}
+
+.startMessage {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+
+.gameOver {
+  margin-bottom: var(--space-xs);
+}
+
+.scoreDisplay {
+  position: absolute;
+  top: var(--space-xs);
+  right: var(--space-xs);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  background-color: var(--color-bg-default);
+  padding: var(--space-2xs);
+  border-radius: var(--control-radius);
+  z-index: 3;
+  box-shadow: var(--shadow-layer);
+}
+
+.themeToggle {
+  position: absolute;
+  top: var(--space-xs);
+  left: var(--space-xs);
+  z-index: 10;
+}
+
+@media (max-width: 600px) {
+  .gameContainer {
+    height: 150px;
+  }
+
+  .character {
+    width: 30px;
+    height: 45px;
+    left: 30px;
+  }
+
+  .barrel {
+    width: 18px;
+    height: 27px;
+  }
+
+  .gameControls {
+    font-size: 14px;
+    padding: var(--space-s);
+  }
+}
+.coin {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: gold;
+  border-radius: 50%;
+  box-shadow: 0 0 8px gold;
+  animation: coinSpin 2s linear infinite;
+}
+
+@keyframes coinSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.frontLeg,
+.backLeg {
+  transform-origin: center;
+  transition: transform 0.2s ease-out;
+}
+
+/* Анимация бега */
+.runningLeg {
+  animation: legMovement 0.4s infinite alternate ease-in-out;
+}
+
+@keyframes legMovement {
+  0% {
+    transform: translateY(0) rotate(-5deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(0deg);
+  }
+  100% {
+    transform: translateY(0) rotate(5deg);
+  }
+}
+
+/* Анимация прыжка */
+.jumpingLeg {
+  animation: jumpLeg 0.5s cubic-bezier(0.5, 1, 0.5, 1);
+}
+
+@keyframes jumpLeg {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(-10deg);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+/* Разные фазы для передних и задних лап */
+.running .frontLeg {
+  animation-delay: 0s;
+}
+
+.running .backLeg {
+  animation-delay: 0.2s;
+}
+.barrelContainer {
+  position: absolute;
+  z-index: 1;
+  overflow: visible;
+}
+
+.barrelContainer svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(2px 2px 3px rgba(0, 0, 0, 0.4));
+}
+
+/* Анимация качения */
+.running .barrelContainer {
+  animation: barrelRoll 1.5s infinite linear;
+  transform-origin: center;
+}
+
+@keyframes barrelRoll {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.star {
+  position: absolute;
+  background: white;
+  border-radius: 50%;
+  z-index: 1;
+  animation: twinkle 2s infinite alternate;
+  box-shadow: 0 0 3px white;
+}
+
+@keyframes twinkle {
+  0% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+/* Для разных мерцаний */
+.star:nth-child(3n) {
+  animation-duration: 2.5s;
+}
+.star:nth-child(5n) {
+  animation-duration: 1.5s;
+}
+.grassBlade {
+  position: absolute;
+  width: 2px;
+  background: linear-gradient(to top, #2e8b57, #5fbd7d);
+  bottom: 0;
+  z-index: 2;
+  border-radius: 1px 1px 0 0;
+  animation: grassWave 3s infinite ease-in-out;
+  transform-origin: bottom;
+  will-change: left; /* Оптимизация анимации */
+}
+
+@keyframes grassWave {
+  0% {
+    transform: skew(-5deg) scaleY(1);
+  }
+  100% {
+    transform: skew(5deg) scaleY(1.1);
+  }
+}
+
+/* Вариации для травинок */
+.grassBlade:nth-child(3n) {
+  background: linear-gradient(to top, #3a9d5d, #6bcb8a);
+  animation-duration: 1.8s;
+}
+.grassBlade:nth-child(5n) {
+  background: linear-gradient(to top, #228b49, #4caf6e);
+  animation-duration: 2.2s;
+  width: 3px;
+}
+.flower {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  background: #ff69b4;
+  border-radius: 50%;
+  z-index: 3;
+  transform: translate(-50%, -50%);
+  will-change: left;
+  animation: flowerBob 2s infinite alternate;
+}
+@keyframes flowerBob {
+  0% {
+    transform: translate(-50%, -60%);
+  }
+  100% {
+    transform: translate(-50%, -40%);
+  }
+}
+.flower::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+}
+running .grassBlade {
+  animation: grassRun 0.3s infinite alternate;
+}
+
+@keyframes grassRun {
+  0% {
+    transform: skew(-15deg);
+  }
+  100% {
+    transform: skew(15deg);
+  }
+}
