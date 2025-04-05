@@ -12,13 +12,13 @@ const ScoreDisplay: React.FC<ScoreDisplayProps> = React.memo(
   ({ score, highScore, coins }) => {
     return (
       <div className={styles.scoreDisplay}>
-        <Text size="s" view="secondary">
+        <Text size="xs" view="primary">
           Очки: {score}
         </Text>
-        <Text size="s" view="secondary">
+        <Text size="xs" view="primary">
           Монетки: {coins}
         </Text>
-        <Text size="s" view="secondary">
+        <Text size="xs" view="primary">
           Рекорд: {highScore}
         </Text>
       </div>
