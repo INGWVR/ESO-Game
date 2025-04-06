@@ -516,7 +516,7 @@ const EsoGame: React.FC = () => {
       className={`${styles.gameCard} ${isNightMode ? styles.night : ""}`}
     >
       <div className={styles.gameContainer}>
-        {/* Трава и цветочки */}
+        {/* Трава */}
         {!isNightMode && (
           <GrassField
             grass={grass}
@@ -525,7 +525,7 @@ const EsoGame: React.FC = () => {
             parallaxOffset={parallaxOffset}
           />
         )}
-        {/* Облака и звузды */}
+        {/* Облака и звезды */}
         {isNightMode
           ? stars.map((star) => <StarComponent key={star.id} {...star} />)
           : clouds.map((cloud) => (
