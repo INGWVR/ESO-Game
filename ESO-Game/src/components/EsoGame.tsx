@@ -84,6 +84,7 @@ const EsoGame: React.FC<EsoGameProps> = ({ isNightMode }) => {
   const isNightModeRef = useRef(false);
   const bearPosRef = useRef({ x: 50, y: 0 });
   const mutedRef = useRef(false);
+  const lastTimeRef = useRef(0);
 
   useEffect(() => { barrelsRef.current = barrels; }, [barrels]);
   useEffect(() => { coinsRef.current = coins; }, [coins]);
@@ -329,7 +330,16 @@ const EsoGame: React.FC<EsoGameProps> = ({ isNightMode }) => {
   useEffect(() => {
     if (gameState !== "running") return;
 
-    const frame = () => {
+    lastTimeRef.current = 0;
+
+    const frame = (timestamp: number) => {
+      // Delta-time: масштабируем покадровые величины к 60fps (1.0 при 60fps).
+      // На VDI с плавающей частотой кадров скорость игры остаётся стабильной.
+      const last = lastTimeRef.current;
+      const dt = last === 0 ? 1 / 60 : Math.min((timestamp - last) / 1000, 0.05);
+      lastTimeRef.current = timestamp;
+      const frameScale = dt * 60;
+
       const pos = bearPosRef.current;
       const bearBox = {
         x: pos.x + 7,
@@ -349,8 +359,8 @@ const EsoGame: React.FC<EsoGameProps> = ({ isNightMode }) => {
             : v > 0
               ? GAME_CONSTANTS.GRAVITY
               : GAME_CONSTANTS.FALL_GRAVITY;
-        const newY = pos.y + jumpVelocity.current;
-        jumpVelocity.current -= gravity;
+        const newY = pos.y + jumpVelocity.current * frameScale;
+        jumpVelocity.current -= gravity * frameScale;
         let finalY = newY;
         if (newY <= 0) {
           finalY = 0;
@@ -367,19 +377,19 @@ const EsoGame: React.FC<EsoGameProps> = ({ isNightMode }) => {
       setBarrels((prev) => {
         if (prev.length === 0) return prev;
         return prev
-          .map((b) => ({ ...b, x: b.x - speed }))
+          .map((b) => ({ ...b, x: b.x - speed * frameScale }))
           .filter((b) => b.x > -GAME_CONSTANTS.BARREL_WIDTH);
       });
       setCoins((prev) => {
         if (prev.length === 0) return prev;
         return prev
-          .map((c) => ({ ...c, x: c.x - speed }))
+          .map((c) => ({ ...c, x: c.x - speed * frameScale }))
           .filter((c) => c.x > -GAME_CONSTANTS.COIN_SIZE);
       });
       setBonuses((prev) => {
         if (prev.length === 0) return prev;
         return prev
-          .map((b) => ({ ...b, x: b.x - speed }))
+          .map((b) => ({ ...b, x: b.x - speed * frameScale }))
           .filter((b) => b.x > -BONUS_WIDTH);
       });
 
@@ -388,10 +398,10 @@ const EsoGame: React.FC<EsoGameProps> = ({ isNightMode }) => {
         setClouds((prevClouds) => {
           let clouds = prevClouds.map((c) => ({
             ...c,
-            x: c.x - c.speed * (speed / 5),
+            x: c.x - c.speed * (speed / 5) * frameScale,
           }));
           clouds = clouds.filter((c) => c.x > -150);
-          if (clouds.length < 10 || (clouds.length < 13 && Math.random() < 0.02)) {
+          if (clouds.length < 10 || (clouds.length < 13 && Math.random() < 0.02 * frameScale)) {
             const cloudWidth = 40 + Math.random() * 30;
             clouds.push({
               id: Date.now(),
@@ -408,9 +418,9 @@ const EsoGame: React.FC<EsoGameProps> = ({ isNightMode }) => {
       // Звёзды (ночь)
       if (isNightModeRef.current) {
         setStars((prev) => {
-          let updated = prev.map((s) => ({ ...s, x: s.x - 0.3 }));
+          let updated = prev.map((s) => ({ ...s, x: s.x - 0.3 * frameScale }));
           updated = updated.filter((s) => s.x > -10);
-          if (Math.random() < 0.02) {
+          if (Math.random() < 0.02 * frameScale) {
             updated.push({
               id: Date.now(),
               x: GAME_CONSTANTS.GAME_WIDTH,
@@ -426,9 +436,9 @@ const EsoGame: React.FC<EsoGameProps> = ({ isNightMode }) => {
 
       // Птицы (всегда)
       setBirds((prev) => {
-        let updated = prev.map((b) => ({ ...b, x: b.x - b.speed }));
+        let updated = prev.map((b) => ({ ...b, x: b.x - b.speed * frameScale }));
         updated = updated.filter((b) => b.x > -40);
-        if (updated.length < 5 && Math.random() < 0.02) {
+        if (updated.length < 5 && Math.random() < 0.02 * frameScale) {
           updated.push({
             id: Date.now(),
             x: GAME_CONSTANTS.GAME_WIDTH + 30,
@@ -442,15 +452,16 @@ const EsoGame: React.FC<EsoGameProps> = ({ isNightMode }) => {
 
       // Трава скроллится медленнее дороги (параллакс)
       setParallaxOffset(
-        (prev) => (prev + speed * 0.5) % (GAME_CONSTANTS.GAME_WIDTH * 0.5)
+        (prev) =>
+          (prev + speed * 0.5 * frameScale) % (GAME_CONSTANTS.GAME_WIDTH * 0.5)
       );
       // Земля скроллится с той же скоростью, что и препятствия (движение под ногами)
-      setGroundOffset((prev) => (prev + speed) % 192);
+      setGroundOffset((prev) => (prev + speed * frameScale) % 192);
 
       // Спавн бочек
       const barrelsNow = barrelsRef.current;
       if (
-        Math.random() < 0.01 &&
+        Math.random() < 0.01 * frameScale &&
         (barrelsNow.length === 0 ||
           barrelsNow[barrelsNow.length - 1].x < GAME_CONSTANTS.GAME_WIDTH - 300)
       ) {
@@ -461,7 +472,7 @@ const EsoGame: React.FC<EsoGameProps> = ({ isNightMode }) => {
       }
 
       // Спавн монет
-      if (Math.random() < 0.002 && coinsRef.current.length < 3) {
+      if (Math.random() < 0.002 * frameScale && coinsRef.current.length < 3) {
         setCoins((prev) => [
           ...prev,
           {
@@ -474,7 +485,7 @@ const EsoGame: React.FC<EsoGameProps> = ({ isNightMode }) => {
       }
 
       // Спавн бонуса
-      if (Math.random() < 0.001 && bonusesRef.current.length === 0) {
+      if (Math.random() < 0.001 * frameScale && bonusesRef.current.length === 0) {
         setBonuses([
           {
             id: Date.now(),
