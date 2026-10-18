@@ -1,5 +1,7 @@
 export type GameState = "idle" | "running" | "gameOver";
 
+export type CharacterType = "bear" | "rabbit";
+
 export interface Position {
   x: number;
   y: number;
@@ -25,6 +27,14 @@ export interface Cloud {
   width: number;
 }
 
+export interface Bird {
+  id: number;
+  x: number;
+  y: number;
+  speed: number;
+  size: number;
+}
+
 export interface Star {
   id: number;
   x: number;
@@ -39,6 +49,8 @@ export interface GrassBlade {
   stiffness: number;
   speed: number;
   layer: number;
+  lean: number;
+  tone: number;
 }
 // types.ts
 export interface Bonus {

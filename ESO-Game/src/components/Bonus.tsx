@@ -1,6 +1,6 @@
 import React from "react";
 import styles from "./EsoGame.module.css";
-import { BONUS_WIDTH, BONUS_HEIGHT } from "./constants";
+import { BONUS_WIDTH, BONUS_HEIGHT, GAME_CONSTANTS } from "./constants";
 
 interface BonusProps {
   x: number;
@@ -16,7 +16,7 @@ const Bonus: React.FC<BonusProps> = React.memo(
         className={styles.bonus}
         style={{
           left: `${x}px`,
-          bottom: `${y}px`,
+          bottom: `${y + GAME_CONSTANTS.GROUND_HEIGHT}px`,
           width: `${BONUS_WIDTH}px`,
           height: `${BONUS_HEIGHT}px`,
         }}

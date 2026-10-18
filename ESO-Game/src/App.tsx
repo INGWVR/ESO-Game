@@ -23,11 +23,11 @@ function App() {
   return (
     <Theme preset={getPreset(theme)}>
       <Switch
-        label="Dark Mode"
+        label="Ночной режим"
         onChange={handleChange}
         checked={theme === "gpnDark"}
       />
-      <EsoGame />
+      <EsoGame isNightMode={theme === "gpnDark"} />
     </Theme>
   );
 }

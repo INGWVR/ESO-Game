@@ -3,7 +3,6 @@ import React, {
   useEffect,
   useRef,
   useCallback,
-  useMemo,
 } from "react";
 import { Card } from "@consta/uikit/Card";
 import styles from "./EsoGame.module.css";
@@ -15,42 +14,57 @@ import {
 } from "./constants";
 import {
   GameState,
+  CharacterType,
   Barrel,
   Coin,
   Cloud,
+  Bird,
   Star,
   GrassBlade,
   Bonus,
 } from "./types";
-import Bear from "./Bear";
+import CharacterShell from "./CharacterShell";
+import { getCharacter } from "./characters";
 import BarrelComponent from "./Barrel";
 import CoinComponent from "./Coin";
 import CloudComponent from "./Cloud";
+import BirdComponent from "./Bird";
 import StarComponent from "./Star";
 import GameControls from "./GameControls";
 import ScoreDisplay from "./ScoreDisplay";
 import BonusComponent from "./Bonus";
-import { presetGpnDark, useTheme } from "@consta/uikit/Theme";
 import GrassField from "./GrassField";
 
-const EsoGame: React.FC = () => {
+interface EsoGameProps {
+  isNightMode: boolean;
+}
+
+const STORAGE_KEYS = {
+  highScore: "highScore",
+  character: "selectedCharacter",
+  muted: "soundMuted",
+} as const;
+
+const EsoGame: React.FC<EsoGameProps> = ({ isNightMode }) => {
   const [gameState, setGameState] = useState<GameState>("idle");
+  const [characterType, setCharacterType] = useState<CharacterType>("bear");
   const [score, setScore] = useState(0);
   const [totalCoins, setTotalCoins] = useState(0);
   const [highScore, setHighScore] = useState(0);
   const [isJumping, setIsJumping] = useState(false);
-  const [isNightMode, setIsNightMode] = useState(false);
   const [gameSpeed, setGameSpeed] = useState(GAME_CONSTANTS.INITIAL_GAME_SPEED);
   const [bearPos, setBearPos] = useState({ x: 50, y: 0 });
   const [barrels, setBarrels] = useState<Barrel[]>([]);
   const [coins, setCoins] = useState<Coin[]>([]);
   const [bonuses, setBonuses] = useState<Bonus[]>([]);
   const [clouds, setClouds] = useState<Cloud[]>([]);
+  const [birds, setBirds] = useState<Bird[]>([]);
   const [stars, setStars] = useState<Star[]>([]);
   const [grass, setGrass] = useState<GrassBlade[]>([]);
-  const [grassOffset, setGrassOffset] = useState(0);
   const [windForce, setWindForce] = useState(0);
   const [parallaxOffset, setParallaxOffset] = useState(0);
+  const [groundOffset, setGroundOffset] = useState(0);
+  const [muted, setMuted] = useState(false);
 
   // Refs для хранения изменяемых значений
   const jumpVelocity = useRef(0);
@@ -59,28 +73,43 @@ const EsoGame: React.FC = () => {
   const windDirection = useRef(1); // 1 или -1 для направления ветра
   const windTimer = useRef<NodeJS.Timeout>(undefined);
 
-  const { theme } = useTheme();
-  const bearBox = useMemo(
-    () => ({
-      x: bearPos.x + 7,
-      y: bearPos.y + 4,
-      width: GAME_CONSTANTS.BEAR_WIDTH - 15,
-      height: GAME_CONSTANTS.BEAR_HEIGHT - 24,
-    }),
-    [bearPos.x, bearPos.y]
-  );
+  // Зеркала состояния в refs — игровой цикл читает их, не перезапуская эффект
+  const barrelsRef = useRef<Barrel[]>([]);
+  const coinsRef = useRef<Coin[]>([]);
+  const bonusesRef = useRef<Bonus[]>([]);
+  const scoreRef = useRef(0);
+  const highScoreRef = useRef(0);
+  const gameSpeedRef = useRef(GAME_CONSTANTS.INITIAL_GAME_SPEED);
+  const isJumpingRef = useRef(false);
+  const isNightModeRef = useRef(false);
+  const bearPosRef = useRef({ x: 50, y: 0 });
+  const mutedRef = useRef(false);
+
+  useEffect(() => { barrelsRef.current = barrels; }, [barrels]);
+  useEffect(() => { coinsRef.current = coins; }, [coins]);
+  useEffect(() => { bonusesRef.current = bonuses; }, [bonuses]);
+  useEffect(() => { scoreRef.current = score; }, [score]);
+  useEffect(() => { highScoreRef.current = highScore; }, [highScore]);
+  useEffect(() => { gameSpeedRef.current = gameSpeed; }, [gameSpeed]);
+  useEffect(() => { isJumpingRef.current = isJumping; }, [isJumping]);
+  useEffect(() => { isNightModeRef.current = isNightMode; }, [isNightMode]);
+  useEffect(() => { bearPosRef.current = bearPos; }, [bearPos]);
+  useEffect(() => { mutedRef.current = muted; }, [muted]);
 
   const playBonusSound = useCallback(() => {
+    if (mutedRef.current) return;
     const audio = new Audio("/sounds/bonus.mp3");
     audio.volume = 0.3;
     audio.play().catch((e) => console.log("Ошибка воспроизведения аудио:", e));
   }, []);
   const playCoinSound = useCallback(() => {
+    if (mutedRef.current) return;
     const audio = new Audio("/sounds/coin.mp3");
     audio.volume = 0.3;
     audio.play().catch((e) => console.log("Ошибка воспроизведения аудио:", e));
   }, []);
   const playJumpSound = useCallback(() => {
+    if (mutedRef.current) return;
     const audio = new Audio("/sounds/jump.mp3");
     audio.volume = 0.3;
     audio.play().catch((e) => console.log("Ошибка воспроизведения аудио:", e));
@@ -95,92 +124,85 @@ const EsoGame: React.FC = () => {
     );
   }, []);
 
-  const handleCoinCollision = useCallback(() => {
-    // Проверка столкновения с монетками
-    const checkCoinCollision = (coin: Coin) => {
-      const coinBox = {
-        x: coin.x - 8 / 2,
-        y: coin.y - 8 / 2,
-        width: GAME_CONSTANTS.COIN_SIZE + 8,
-        height: GAME_CONSTANTS.COIN_SIZE + 8,
-      };
-
-      return (
-        bearBox.x < coinBox.x + coinBox.width &&
-        bearBox.x + bearBox.width > coinBox.x &&
-        bearBox.y < coinBox.y + coinBox.height &&
-        bearBox.y + bearBox.height > coinBox.y
-      );
-    };
-
-    setCoins((prevCoins) => {
-      const newCoins = [...prevCoins];
-      let scoreToAdd = 0;
-      let coinsToAdd = 0;
-
-      newCoins
-        .filter((c) => !c.collected && Math.abs(c.x - bearPos.x) < 100)
-        .forEach((coin) => {
-          if (checkCoinCollision(coin)) {
-            coin.collected = true;
-            scoreToAdd += GAME_CONSTANTS.COIN_POINTS;
-            coinsToAdd += 1;
-            playCoinSound();
-          }
-        });
-
-      if (scoreToAdd > 0) {
-        setScore((prev) => prev + scoreToAdd);
-        setTotalCoins((c) => c + coinsToAdd);
-      }
-
-      return newCoins.filter((coin) => !coin.collected); // Удаляем только собранные монеты
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bearBox.x, bearBox.y]);
   // Генерация травы
   const generateGrass = useCallback(() => {
     const grassArray: GrassBlade[] = [];
-    const density = 4;
-    const grassWidth = GAME_CONSTANTS.GAME_WIDTH * 1.5; // Делаем траву шире экрана
+    const density = 3;
+    const period = GAME_CONSTANTS.GAME_WIDTH * 0.5; // период для бесшовного скролла
+    const grassWidth = GAME_CONSTANTS.GAME_WIDTH * 1.5; // три копии периода
 
-    for (let i = 0; i < grassWidth; i += density) {
-      grassArray.push({
-        id: i,
-        x: i,
-        height: 10 + Math.random() * 30,
+    // Генерируем один период травы
+    const periodBlades: Omit<GrassBlade, "id" | "x">[] = [];
+    for (let x = 0; x < period; x += density) {
+      periodBlades.push({
+        height: 5 + Math.random() * 13, // короткая естественная трава
         stiffness: 0.3 + Math.random() * 0.3,
         speed: 0.3 + Math.random() * 0.4,
         layer: Math.floor(Math.random() * 3), // 0, 1 или 2 - слой для параллакса
+        lean: Math.random() * 2 - 1, // естественный наклон влево/вправо (-1..1)
+        tone: Math.random() * 2 - 1, // вариация цвета травинки (-1..1)
       });
     }
+
+    // Тиражируем период по всей ширине (бесшовный повтор)
+    let id = 0;
+    for (let rep = 0; rep * period < grassWidth; rep++) {
+      periodBlades.forEach((blade, idx) => {
+        grassArray.push({
+          ...blade,
+          id: id++,
+          x: rep * period + idx * density,
+        });
+      });
+    }
+
     setGrass(grassArray);
   }, []);
-  const updateGrassAnimation = useCallback(() => {
-    setGrassOffset((prev) => (prev + gameSpeed * 0.1) % (2 * Math.PI));
-  }, [gameSpeed]);
-  // Загрузка рекорда
+  // Загрузка рекорда и выбранного персонажа
   useEffect(() => {
-    const savedHighScore = localStorage.getItem("bearHighScore");
+    // Миграция со старого ключа (bearHighScore)
+    const legacyHighScore = localStorage.getItem("bearHighScore");
+    if (legacyHighScore && !localStorage.getItem(STORAGE_KEYS.highScore)) {
+      localStorage.setItem(STORAGE_KEYS.highScore, legacyHighScore);
+      localStorage.removeItem("bearHighScore");
+    }
+
+    const savedHighScore = localStorage.getItem(STORAGE_KEYS.highScore);
     if (savedHighScore) {
       setHighScore(parseInt(savedHighScore));
     }
+    const savedCharacter = localStorage.getItem(STORAGE_KEYS.character);
+    if (savedCharacter === "bear" || savedCharacter === "rabbit") {
+      setCharacterType(savedCharacter);
+    }
+    const savedMuted = localStorage.getItem(STORAGE_KEYS.muted);
+    if (savedMuted === "true") {
+      setMuted(true);
+    }
+  }, []);
+
+  // Выбор персонажа
+  const selectCharacter = useCallback((type: CharacterType) => {
+    setCharacterType(type);
+    localStorage.setItem(STORAGE_KEYS.character, type);
   }, []);
 
   // Прыжок медведя
   const jump = useCallback(() => {
-    if (gameState !== "running" || isJumping) return;
+    if (gameState !== "running" || isJumpingRef.current) return;
     setIsJumping(true);
     playJumpSound();
     jumpVelocity.current = GAME_CONSTANTS.JUMP_VELOCITY;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState, isJumping]);
+  }, [gameState]);
 
-  useEffect(() => {
-    if (!isNightMode) {
-      generateGrass();
+  // Обрезка прыжка: при отпускании клавиши ограничиваем восходящую скорость,
+  // чтобы прыжок был ниже, но с плавной дугой (без резкого падения)
+  const jumpCut = useCallback(() => {
+    if (jumpVelocity.current > GAME_CONSTANTS.JUMP_CUT_VELOCITY) {
+      jumpVelocity.current = GAME_CONSTANTS.JUMP_CUT_VELOCITY;
     }
-  }, [isNightMode, generateGrass]);
+  }, []);
 
   // Эффект для управления ветром
   useEffect(() => {
@@ -220,8 +242,7 @@ const EsoGame: React.FC = () => {
   }, [gameState]);
 
   useEffect(() => {
-    if (theme.color.primary === presetGpnDark.color.primary) {
-      setIsNightMode(true);
+    if (isNightMode) {
       setStars(
         Array.from({ length: 30 }, (_, i) => ({
           id: i,
@@ -232,23 +253,29 @@ const EsoGame: React.FC = () => {
           size: 0.5 + Math.random() * 2,
         }))
       );
-      setGrass([]);
+      generateGrass();
     } else {
-      setIsNightMode(false);
-      const cloudWidth = 40 + Math.random() * 30;
       setClouds(
-        Array.from({ length: 5 }, (_, i) => ({
+        Array.from({ length: 10 }, (_, i) => ({
           id: i,
           x: Math.random() * GAME_CONSTANTS.GAME_WIDTH,
-          y: 30 + Math.random() * 50,
+          y: 20 + Math.random() * 160,
           speed: 0.5 + Math.random(),
-          width: cloudWidth,
+          width: 40 + Math.random() * 30,
         }))
       );
       generateGrass();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [theme.color.primary]);
+    setBirds(
+      Array.from({ length: 5 }, (_, i) => ({
+        id: i,
+        x: Math.random() * GAME_CONSTANTS.GAME_WIDTH,
+        y: 30 + Math.random() * 120,
+        speed: 0.3 + Math.random() * 0.4,
+        size: 14 + Math.random() * 8,
+      }))
+    );
+  }, [isNightMode, generateGrass]);
 
   //Старт игры
   const startGame = useCallback(() => {
@@ -259,14 +286,24 @@ const EsoGame: React.FC = () => {
     setBearPos({ x: 60, y: 0 });
     setBarrels([]);
     setCoins([]);
+    setBonuses([]);
     setGameSpeed(GAME_CONSTANTS.INITIAL_GAME_SPEED);
     setClouds(
-      Array.from({ length: 5 }, (_, i) => ({
+      Array.from({ length: 10 }, (_, i) => ({
         id: i,
         x: Math.random() * GAME_CONSTANTS.GAME_WIDTH * 1.5,
-        y: 20 + Math.random() * 60,
+        y: 20 + Math.random() * 160,
         speed: 0.5 + Math.random() * 0.7,
         width: 40 + Math.random() * 30,
+      }))
+    );
+    setBirds(
+      Array.from({ length: 5 }, (_, i) => ({
+        id: i,
+        x: Math.random() * GAME_CONSTANTS.GAME_WIDTH,
+        y: 30 + Math.random() * 120,
+        speed: 0.3 + Math.random() * 0.4,
+        size: 14 + Math.random() * 8,
       }))
     );
     clearInterval(scoreIntervalRef.current);
@@ -279,107 +316,143 @@ const EsoGame: React.FC = () => {
     setGameState("gameOver");
     clearInterval(scoreIntervalRef.current);
     cancelAnimationFrame(gameLoopRef.current);
+    setIsJumping(false);
+    setBearPos((p) => ({ ...p, y: 0 }));
 
-    if (score > highScore) {
-      setHighScore(score);
-      localStorage.setItem("bearHighScore", score.toString());
+    if (scoreRef.current > highScoreRef.current) {
+      setHighScore(scoreRef.current);
+      localStorage.setItem(STORAGE_KEYS.highScore, scoreRef.current.toString());
     }
-  }, [score, highScore]);
+  }, []);
 
   // Основной игровой цикл
   useEffect(() => {
     if (gameState !== "running") return;
-    const updateParallax = () => {
-      // Медведь движется вправо, трава должна смещаться медленнее (параллакс)
-      setParallaxOffset((prev) => {
-        const newOffset = prev + gameSpeed * 0.3; // Коэффициент замедления
-        return newOffset % (GAME_CONSTANTS.GAME_WIDTH * 0.5); // Зацикливаем смещение
-      });
-    };
+
     const frame = () => {
-      setBearPos((pos) => {
-        if (!isJumping) return pos;
+      const pos = bearPosRef.current;
+      const bearBox = {
+        x: pos.x + 7,
+        y: pos.y + 4,
+        width: GAME_CONSTANTS.BEAR_WIDTH - 15,
+        height: GAME_CONSTANTS.BEAR_HEIGHT - 24,
+      };
+      const speed = gameSpeedRef.current;
 
+      // Прыжок (переменная высота + асимметричная гравитация + зависание у вершины)
+      if (isJumpingRef.current) {
+        const v = jumpVelocity.current;
+        const absV = Math.abs(v);
+        const gravity =
+          absV < GAME_CONSTANTS.HANG_THRESHOLD
+            ? GAME_CONSTANTS.HANG_GRAVITY
+            : v > 0
+              ? GAME_CONSTANTS.GRAVITY
+              : GAME_CONSTANTS.FALL_GRAVITY;
         const newY = pos.y + jumpVelocity.current;
-        jumpVelocity.current -= GAME_CONSTANTS.GRAVITY;
-
+        jumpVelocity.current -= gravity;
+        let finalY = newY;
         if (newY <= 0) {
+          finalY = 0;
+          jumpVelocity.current = 0;
           setIsJumping(false);
+        } else if (newY > GAME_CONSTANTS.JUMP_HEIGHT) {
           jumpVelocity.current = 0;
-          setTimeout(() => {
-            setBearPos((pos) => ({ ...pos, y: 0 }));
-          }, 50);
-          return { ...pos, y: 0 };
+          finalY = GAME_CONSTANTS.JUMP_HEIGHT;
         }
+        setBearPos({ x: pos.x, y: finalY });
+      }
 
-        if (newY > GAME_CONSTANTS.JUMP_HEIGHT) {
-          jumpVelocity.current = 0;
-          return { ...pos, y: GAME_CONSTANTS.JUMP_HEIGHT };
-        }
-
-        return { ...pos, y: newY };
+      // Движение объектов
+      setBarrels((prev) => {
+        if (prev.length === 0) return prev;
+        return prev
+          .map((b) => ({ ...b, x: b.x - speed }))
+          .filter((b) => b.x > -GAME_CONSTANTS.BARREL_WIDTH);
+      });
+      setCoins((prev) => {
+        if (prev.length === 0) return prev;
+        return prev
+          .map((c) => ({ ...c, x: c.x - speed }))
+          .filter((c) => c.x > -GAME_CONSTANTS.COIN_SIZE);
+      });
+      setBonuses((prev) => {
+        if (prev.length === 0) return prev;
+        return prev
+          .map((b) => ({ ...b, x: b.x - speed }))
+          .filter((b) => b.x > -BONUS_WIDTH);
       });
 
-      setBarrels((prev) =>
-        prev
-          .map((b) => ({ ...b, x: b.x - gameSpeed }))
-          .filter((b) => b.x > -GAME_CONSTANTS.BARREL_WIDTH)
-      );
+      // Облака (день)
+      if (!isNightModeRef.current) {
+        setClouds((prevClouds) => {
+          let clouds = prevClouds.map((c) => ({
+            ...c,
+            x: c.x - c.speed * (speed / 5),
+          }));
+          clouds = clouds.filter((c) => c.x > -150);
+          if (clouds.length < 10 || (clouds.length < 13 && Math.random() < 0.02)) {
+            const cloudWidth = 40 + Math.random() * 30;
+            clouds.push({
+              id: Date.now(),
+              x: GAME_CONSTANTS.GAME_WIDTH + cloudWidth,
+              y: 20 + Math.random() * 160,
+              speed: 0.5 + Math.random() * 0.7,
+              width: cloudWidth,
+            });
+          }
+          return clouds;
+        });
+      }
 
-      setCoins((prev) =>
-        prev
-          .map((c) => ({ ...c, x: c.x - gameSpeed }))
-          .filter((c) => c.x > -GAME_CONSTANTS.COIN_SIZE)
-      );
+      // Звёзды (ночь)
+      if (isNightModeRef.current) {
+        setStars((prev) => {
+          let updated = prev.map((s) => ({ ...s, x: s.x - 0.3 }));
+          updated = updated.filter((s) => s.x > -10);
+          if (Math.random() < 0.02) {
+            updated.push({
+              id: Date.now(),
+              x: GAME_CONSTANTS.GAME_WIDTH,
+              y:
+                Math.random() *
+                (GAME_CONSTANTS.GAME_HEIGHT - GAME_CONSTANTS.GROUND_HEIGHT - 20),
+              size: 0.5 + Math.random() * 2,
+            });
+          }
+          return updated;
+        });
+      }
 
-      setBonuses((prev) =>
-        prev
-          .map((b) => ({ ...b, x: b.x - gameSpeed }))
-          .filter((b) => b.x > -BONUS_WIDTH)
-      );
-
-      setClouds((prevClouds) => {
-        if (isNightMode) return prevClouds;
-        let clouds = prevClouds.map((c) => ({
-          ...c,
-          x: c.x - c.speed * (gameSpeed / 5),
-        }));
-        clouds = clouds.filter((c) => c.x > -150);
-        if (clouds.length < 5 || (clouds.length < 8 && Math.random() < 0.02)) {
-          const cloudWidth = 40 + Math.random() * 30;
-          clouds.push({
-            id: Date.now(),
-            x: GAME_CONSTANTS.GAME_WIDTH + cloudWidth,
-            y: 20 + Math.random() * 60,
-            speed: 0.5 + Math.random() * 0.7,
-            width: cloudWidth,
-          });
-        }
-        return clouds;
-      });
-
-      setStars((prev) => {
-        if (!isNightMode) return prev;
-        let updated = prev.map((s) => ({ ...s, x: s.x - 0.3 }));
-        updated = updated.filter((s) => s.x > -10);
-        if (Math.random() < 0.02) {
+      // Птицы (всегда)
+      setBirds((prev) => {
+        let updated = prev.map((b) => ({ ...b, x: b.x - b.speed }));
+        updated = updated.filter((b) => b.x > -40);
+        if (updated.length < 5 && Math.random() < 0.02) {
           updated.push({
             id: Date.now(),
-            x: GAME_CONSTANTS.GAME_WIDTH,
-            y:
-              Math.random() *
-              (GAME_CONSTANTS.GAME_HEIGHT - GAME_CONSTANTS.GROUND_HEIGHT - 20),
-            size: 0.5 + Math.random() * 2,
+            x: GAME_CONSTANTS.GAME_WIDTH + 30,
+            y: 30 + Math.random() * 120,
+            speed: 0.3 + Math.random() * 0.4,
+            size: 14 + Math.random() * 8,
           });
         }
         return updated;
       });
 
-      updateGrassAnimation();
+      // Трава скроллится медленнее дороги (параллакс)
+      setParallaxOffset(
+        (prev) => (prev + speed * 0.5) % (GAME_CONSTANTS.GAME_WIDTH * 0.5)
+      );
+      // Земля скроллится с той же скоростью, что и препятствия (движение под ногами)
+      setGroundOffset((prev) => (prev + speed) % 192);
+
+      // Спавн бочек
+      const barrelsNow = barrelsRef.current;
       if (
         Math.random() < 0.01 &&
-        (barrels.length === 0 ||
-          barrels[barrels.length - 1].x < GAME_CONSTANTS.GAME_WIDTH - 300)
+        (barrelsNow.length === 0 ||
+          barrelsNow[barrelsNow.length - 1].x < GAME_CONSTANTS.GAME_WIDTH - 300)
       ) {
         setBarrels((prev) => [
           ...prev,
@@ -387,7 +460,8 @@ const EsoGame: React.FC = () => {
         ]);
       }
 
-      if (Math.random() < 0.002 && coins.length < 3) {
+      // Спавн монет
+      if (Math.random() < 0.002 && coinsRef.current.length < 3) {
         setCoins((prev) => [
           ...prev,
           {
@@ -399,22 +473,45 @@ const EsoGame: React.FC = () => {
         ]);
       }
 
-      if (Math.random() < 0.001 && bonuses.length === 0) {
+      // Спавн бонуса
+      if (Math.random() < 0.001 && bonusesRef.current.length === 0) {
         setBonuses([
           {
             id: Date.now(),
             x: GAME_CONSTANTS.GAME_WIDTH,
-            y: GAME_CONSTANTS.GROUND_HEIGHT + 40 + Math.random() * 50,
+            y: 40 + Math.random() * 50,
             type: "gazprom",
             collected: false,
           },
         ]);
       }
-      //Проверка на подбор монет
-      handleCoinCollision();
 
-      //Проверка на столкновение с бочкой
-      const hitBarrel = barrels.some((b) => {
+      // Сбор монет
+      const hitCoinIds = new Set<number>();
+      for (const coin of coinsRef.current) {
+        if (coin.collected || Math.abs(coin.x - pos.x) >= 100) continue;
+        const coinBox = {
+          x: coin.x - 4,
+          y: coin.y - 4,
+          width: GAME_CONSTANTS.COIN_SIZE + 8,
+          height: GAME_CONSTANTS.COIN_SIZE + 8,
+        };
+        const overlaps =
+          bearBox.x < coinBox.x + coinBox.width &&
+          bearBox.x + bearBox.width > coinBox.x &&
+          bearBox.y < coinBox.y + coinBox.height &&
+          bearBox.y + bearBox.height > coinBox.y;
+        if (overlaps) hitCoinIds.add(coin.id);
+      }
+      if (hitCoinIds.size > 0) {
+        setCoins((prev) => prev.filter((c) => !hitCoinIds.has(c.id)));
+        setScore((s) => s + hitCoinIds.size * GAME_CONSTANTS.COIN_POINTS);
+        setTotalCoins((c) => c + hitCoinIds.size);
+        playCoinSound();
+      }
+
+      // Столкновение с бочкой
+      const hitBarrel = barrelsRef.current.some((b) => {
         const barrelBox = {
           x: b.x + 5,
           y: 0,
@@ -428,16 +525,14 @@ const EsoGame: React.FC = () => {
           bearBox.y + bearBox.height > barrelBox.y
         );
       });
-
       if (hitBarrel) {
         endGame();
         return;
       }
 
-      // Проверка столкновения с бонусом
-      const collectedBonus = bonuses.find((b) => {
+      // Сбор бонуса
+      const collectedBonus = bonusesRef.current.find((b) => {
         if (b.collected) return false;
-        // Хитбокс бонуса
         const bonusBox = {
           x: b.x,
           y: b.y,
@@ -453,53 +548,46 @@ const EsoGame: React.FC = () => {
       });
       if (collectedBonus) {
         playBonusSound();
-        setBonuses((prev) =>
-          prev.map((b) =>
-            b.id === collectedBonus.id ? { ...b, collected: true } : b
-          )
-        );
+        setBonuses((prev) => prev.filter((b) => b.id !== collectedBonus.id));
         setScore((s) => s + BONUS_POINTS);
       }
 
-      setGameSpeed(calculateGameSpeed(score));
+      setGameSpeed(calculateGameSpeed(scoreRef.current));
       gameLoopRef.current = requestAnimationFrame(frame);
     };
-    const parallaxInterval = setInterval(updateParallax, 16);
+
     gameLoopRef.current = requestAnimationFrame(frame);
     return () => {
-      clearInterval(parallaxInterval);
       if (gameLoopRef.current) {
         cancelAnimationFrame(gameLoopRef.current);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    gameState,
-    isJumping,
-    bearPos,
-    barrels,
-    coins,
-    gameSpeed,
-    isNightMode,
-    endGame,
-    bonuses,
-    handleCoinCollision,
-    bearBox.x,
-    bearBox.y,
-  ]);
+  }, [gameState, endGame, calculateGameSpeed, playCoinSound, playBonusSound]);
 
   // Управление с клавиатуры
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.code === "Space" || e.key === "ArrowUp") && !isJumping) {
-        if (gameState === "idle") startGame();
-        else jump();
-      }
+      if (e.code !== "Space" && e.key !== "ArrowUp") return;
+      // Не даём Space/стрелке прокручивать страницу
+      e.preventDefault();
+      // Игнорируем автоповтор (зажатие клавиши) — иначе прыжок зацикливается
+      if (e.repeat) return;
+      if (isJumpingRef.current) return;
+      if (gameState === "idle" || gameState === "gameOver") startGame();
+      else jump();
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== "Space" && e.key !== "ArrowUp") return;
+      jumpCut();
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [gameState, isJumping, jump, startGame]);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [gameState, jump, jumpCut, startGame]);
 
   // Очистка при размонтировании
   useEffect(() => {
@@ -509,28 +597,75 @@ const EsoGame: React.FC = () => {
     };
   }, []);
 
+  const character = getCharacter(characterType);
+
   return (
     <Card
-      verticalSpace="xl"
-      horizontalSpace="xl"
       className={`${styles.gameCard} ${isNightMode ? styles.night : ""}`}
     >
       <div className={styles.gameContainer}>
         {/* Трава */}
-        {!isNightMode && (
-          <GrassField
-            grass={grass}
-            offset={grassOffset}
-            windForce={windForce}
-            parallaxOffset={parallaxOffset}
-          />
+        <GrassField
+          grass={grass}
+          windForce={windForce}
+          parallaxOffset={parallaxOffset}
+          isNight={isNightMode}
+        />
+        {/* Солнце (только днём) */}
+        {!isNightMode && <div className={styles.sun} />}
+
+        {/* Месяц (только ночью) */}
+        {isNightMode && (
+          <div className={styles.moon}>
+            <svg viewBox="0 0 64 64" width="100%" height="100%">
+              <path
+                d="M39.5 4.5c-15.5 0-28 12.5-28 28s12.5 28 28 28c2.5 0 5-.3 7.4-.9C37.6 54.4 31 44.4 31 32.5S37.6 10.6 46.9 5.4c-2.4-.6-4.9-.9-7.4-.9z"
+                fill="#f5efd2"
+              />
+            </svg>
+          </div>
         )}
+
+        {/* Холмы и горы (дальний план) */}
+        <svg
+          className={styles.hills}
+          viewBox="0 0 600 140"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          {/* Дальние горы */}
+          <path
+            d="M0 140 L25 100 L60 140 L115 58 L150 140 L205 78 L250 140 L305 48 L345 140 L400 80 L450 140 L505 55 L545 140 L600 70 L600 140 Z"
+            fill={isNightMode ? "#3d4f5f" : "#a9c3d4"}
+            opacity="0.9"
+          />
+          {/* Снежные шапки (только днём) */}
+          {!isNightMode && (
+            <>
+              <path d="M115 58 L103 80 L115 70 L127 80 Z" fill="#ffffff" opacity="0.9" />
+              <path d="M305 48 L293 70 L305 60 L317 70 Z" fill="#ffffff" opacity="0.9" />
+              <path d="M505 55 L493 77 L505 67 L517 77 Z" fill="#ffffff" opacity="0.9" />
+            </>
+          )}
+          {/* Ближние холмы (плавные) */}
+          <path
+            d="M0 140 Q50 98 105 112 Q160 80 220 102 Q285 86 345 108 Q405 76 470 102 Q530 90 600 140 Z"
+            fill={isNightMode ? "#2f4232" : "#7fb069"}
+            opacity="0.95"
+          />
+        </svg>
+
         {/* Облака и звезды */}
         {isNightMode
           ? stars.map((star) => <StarComponent key={star.id} {...star} />)
           : clouds.map((cloud) => (
               <CloudComponent key={`cloud-${cloud.id}`} {...cloud} />
             ))}
+
+        {/* Птицы */}
+        {birds.map((bird) => (
+          <BirdComponent key={`bird-${bird.id}`} {...bird} />
+        ))}
 
         {/* Бочки */}
         {barrels.map((barrel) => (
@@ -555,24 +690,67 @@ const EsoGame: React.FC = () => {
             />
           ))}
 
-        {/* Медведь */}
-        <Bear
+        {/* Тень персонажа */}
+        <div
+          className={styles.characterShadow}
+          style={{
+            bottom: `${GAME_CONSTANTS.GROUND_HEIGHT / 2 - 9}px`,
+            left: `${bearPos.x + character.shadowLeftOffset}px`,
+            width: `${character.shadowWidth}px`,
+            opacity: Math.max(0, 1 - bearPos.y / GAME_CONSTANTS.JUMP_HEIGHT),
+            transform: `scaleX(${1 - (bearPos.y / GAME_CONSTANTS.JUMP_HEIGHT) * 0.6})`,
+          }}
+        />
+
+        {/* Персонаж */}
+        <CharacterShell
           x={bearPos.x}
           y={bearPos.y}
           isJumping={isJumping}
           isRunning={gameState === "running"}
+          isGameOver={gameState === "gameOver"}
           onClick={gameState !== "running" ? startGame : jump}
+          bottomOffset={character.bottomOffset}
+          Art={character.Art}
         />
 
         {/* Земля */}
-        <div className={styles.ground} />
+        <div className={styles.ground}>
+          <div
+            className={styles.groundTexture}
+            style={{ backgroundPositionX: `-${groundOffset}px` }}
+          />
+        </div>
 
         {/* Счет */}
-        <ScoreDisplay score={score} highScore={highScore} coins={totalCoins} />
+        <ScoreDisplay
+          score={score}
+          highScore={Math.max(score, highScore)}
+          coins={totalCoins}
+        />
+
+        {/* Кнопка звука */}
+        <button
+          className={styles.muteButton}
+          onClick={() => {
+            const next = !muted;
+            setMuted(next);
+            localStorage.setItem(STORAGE_KEYS.muted, String(next));
+          }}
+          title={muted ? "Включить звук" : "Выключить звук"}
+        >
+          {muted ? "🔇" : "🔊"}
+        </button>
 
         {/* Управление */}
         {gameState !== "running" && (
-          <GameControls gameState={gameState} onStartGame={startGame} />
+          <GameControls
+            gameState={gameState}
+            onStartGame={startGame}
+            score={score}
+            characterType={characterType}
+            onSelectCharacter={selectCharacter}
+          />
         )}
       </div>
     </Card>
